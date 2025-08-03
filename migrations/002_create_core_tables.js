@@ -1,7 +1,7 @@
 export const up = async (knex) => {
   // Create platforms table
   await knex.schema.createTable('platforms', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.string('name', 255);
     table.string('url', 500);
     table.timestamp('created_at').defaultTo(knex.fn.now());
@@ -10,7 +10,7 @@ export const up = async (knex) => {
 
   // Create accounts table
   await knex.schema.createTable('accounts', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
     table.string('name', 255).notNullable();
     table.string('account_type', 50).defaultTo('SECURITIES');
@@ -29,7 +29,7 @@ export const up = async (knex) => {
 
   // Create assets table
   await knex.schema.createTable('assets', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.string('isin', 12);
     table.string('name', 255);
     table.string('asset_type', 50);
@@ -57,7 +57,7 @@ export const up = async (knex) => {
 
   // Create activities table
   await knex.schema.createTable('activities', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.uuid('account_id').notNullable().references('id').inTable('accounts').onDelete('CASCADE');
     table.uuid('asset_id').notNullable().references('id').inTable('assets').onDelete('CASCADE');
     table.string('activity_type', 50).notNullable();
@@ -80,7 +80,7 @@ export const up = async (knex) => {
 
   // Create quotes table
   await knex.schema.createTable('quotes', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.string('symbol', 20).notNullable();
     table.timestamp('timestamp').notNullable();
     table.decimal('open_price', 20, 8);
@@ -97,112 +97,178 @@ export const up = async (knex) => {
     table.index('timestamp');
     table.index(['symbol', 'timestamp']);
     table.unique(['symbol', 'timestamp', 'data_source']);
+  });
+
+  // Create holdings table
+  await knex.schema.createTable('holdings', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    table.uuid('account_id').notNullable().references('id').inTable('accounts').onDelete('CASCADE');
+    table.uuid('asset_id').notNullable().references('id').inTable('assets').onDelete('CASCADE');
+    table.decimal('quantity', 20, 8).notNullable();
+    table.decimal('average_price', 20, 8);
+    table.string('currency', 3).notNullable();
+    table.timestamp('as_of_date').notNullable();
+    table.timestamp('created_at').defaultTo(knex.fn.now());
+    table.timestamp('updated_at').defaultTo(knex.fn.now());
     
-    table.foreign('symbol').references('symbol').inTable('assets');
+    table.index('account_id');
+    table.index('asset_id');
+    table.index('as_of_date');
+    table.unique(['account_id', 'asset_id', 'as_of_date']);
+  });
+
+  // Create account_valuations table
+  await knex.schema.createTable('account_valuations', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    table.uuid('account_id').notNullable().references('id').inTable('accounts').onDelete('CASCADE');
+    table.timestamp('valuation_date').notNullable();
+    table.decimal('total_value', 20, 8).notNullable();
+    table.decimal('market_value', 20, 8).notNullable();
+    table.decimal('book_cost', 20, 8).notNullable();
+    table.decimal('available_cash', 20, 8).notNullable();
+    table.decimal('net_deposits', 20, 8).notNullable();
+    table.string('currency', 3).notNullable();
+    table.string('base_currency', 3).notNullable();
+    table.decimal('exchange_rate', 20, 8).notNullable();
+    table.timestamp('calculated_at').defaultTo(knex.fn.now());
+    
+    table.index('account_id');
+    table.index('valuation_date');
+    table.unique(['account_id', 'valuation_date']);
   });
 
   // Create goals table
   await knex.schema.createTable('goals', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
-    table.string('title', 255).notNullable();
+    table.string('name', 255).notNullable();
     table.text('description');
     table.decimal('target_amount', 20, 8).notNullable();
-    table.boolean('is_achieved').defaultTo(false);
+    table.string('currency', 3).notNullable();
+    table.timestamp('target_date');
+    table.string('goal_type', 50).defaultTo('SAVINGS');
+    table.decimal('yearly_contribution', 20, 8);
+    table.decimal('current_amount', 20, 8).defaultTo(0);
+    table.decimal('achieved_amount', 20, 8).defaultTo(0);
+    table.decimal('progress_percent', 5, 2).defaultTo(0);
+    table.boolean('is_active').defaultTo(true);
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     
     table.index('user_id');
+    table.index('goal_type');
+    table.index('target_date');
   });
 
-  // Create goals_allocation table
-  await knex.schema.createTable('goals_allocation', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
-    table.integer('percent_allocation').notNullable();
+  // Create goal_allocations table
+  await knex.schema.createTable('goal_allocations', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.uuid('goal_id').notNullable().references('id').inTable('goals').onDelete('CASCADE');
-    table.uuid('account_id').notNullable().references('id').inTable('accounts').onDelete('CASCADE');
+    table.uuid('asset_id').notNullable().references('id').inTable('assets').onDelete('CASCADE');
+    table.decimal('allocation_percent', 5, 2).notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     
     table.index('goal_id');
-    table.index('account_id');
+    table.index('asset_id');
+    table.unique(['goal_id', 'asset_id']);
   });
 
-  // Create contribution_limits table
-  await knex.schema.createTable('contribution_limits', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
-    table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
-    table.string('group_name', 255).notNullable();
-    table.integer('contribution_year').notNullable();
-    table.decimal('limit_amount', 20, 8).notNullable();
-    table.json('account_ids');
-    table.timestamp('start_date');
-    table.timestamp('end_date');
+  // Create exchange_rates table
+  await knex.schema.createTable('exchange_rates', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    table.string('from_currency', 3).notNullable();
+    table.string('to_currency', 3).notNullable();
+    table.decimal('rate', 20, 8).notNullable();
+    table.timestamp('rate_date').notNullable();
+    table.string('data_source', 50).notNullable();
+    table.timestamp('created_at').defaultTo(knex.fn.now());
+    
+    table.index('from_currency');
+    table.index('to_currency');
+    table.index('rate_date');
+    table.unique(['from_currency', 'to_currency', 'rate_date', 'data_source']);
+  });
+
+  // Create market_data_providers table
+  await knex.schema.createTable('market_data_providers', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    table.string('name', 255).notNullable();
+    table.string('logo_filename', 255);
+    table.string('url', 500);
+    table.boolean('is_active').defaultTo(true);
+    table.timestamp('last_synced_date');
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     
-    table.index('user_id');
-    table.index('contribution_year');
+    table.index('name');
+    table.index('is_active');
   });
 
-  // Create activity_import_profiles table
-  await knex.schema.createTable('activity_import_profiles', (table) => {
-    table.uuid('account_id').primary().references('id').inTable('accounts').onDelete('CASCADE');
-    table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+  // Create import_mappings table
+  await knex.schema.createTable('import_mappings', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    table.uuid('account_id').notNullable().references('id').inTable('accounts').onDelete('CASCADE');
     table.json('field_mappings').notNullable();
     table.json('activity_mappings').notNullable();
     table.json('symbol_mappings').notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     
-    table.index('user_id');
+    table.index('account_id');
   });
 
-  // Create holdings_snapshots table
-  await knex.schema.createTable('holdings_snapshots', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
-    table.uuid('account_id').notNullable().references('id').inTable('accounts').onDelete('CASCADE');
-    table.date('snapshot_date').notNullable();
+  // Create contribution_limits table
+  await knex.schema.createTable('contribution_limits', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+    table.string('account_type', 50).notNullable();
+    table.string('limit_type', 50).notNullable();
+    table.decimal('annual_limit', 20, 8).notNullable();
     table.string('currency', 3).notNullable();
-    table.json('positions').notNullable();
-    table.json('cash_balances').notNullable();
-    table.decimal('cost_basis', 20, 8).notNullable();
-    table.decimal('net_contribution', 20, 8).notNullable();
-    table.timestamp('calculated_at').notNullable();
+    table.integer('year').notNullable();
+    table.decimal('used_amount', 20, 8).defaultTo(0);
+    table.decimal('remaining_amount', 20, 8);
+    table.boolean('is_active').defaultTo(true);
     table.timestamp('created_at').defaultTo(knex.fn.now());
+    table.timestamp('updated_at').defaultTo(knex.fn.now());
     
-    table.index('account_id');
-    table.index('snapshot_date');
+    table.index('user_id');
+    table.index('account_type');
+    table.index('year');
+    table.unique(['user_id', 'account_type', 'limit_type', 'year']);
   });
 
-  // Create daily_account_valuation table
-  await knex.schema.createTable('daily_account_valuation', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
-    table.uuid('account_id').notNullable().references('id').inTable('accounts').onDelete('CASCADE');
-    table.date('valuation_date').notNullable();
-    table.string('account_currency', 3).notNullable();
-    table.string('base_currency', 3).notNullable();
-    table.decimal('fx_rate_to_base', 20, 8).notNullable();
-    table.decimal('cash_balance', 20, 8).notNullable();
-    table.decimal('investment_market_value', 20, 8).notNullable();
-    table.decimal('total_value', 20, 8).notNullable();
-    table.decimal('cost_basis', 20, 8).notNullable();
-    table.decimal('net_contribution', 20, 8).notNullable();
-    table.timestamp('calculated_at').notNullable();
+  // Create deposits_calculation table
+  await knex.schema.createTable('deposits_calculation', (table) => {
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+    table.uuid('contribution_limit_id').references('id').inTable('contribution_limits').onDelete('SET NULL');
+    table.string('account_type', 50).notNullable();
+    table.string('limit_type', 50).notNullable();
+    table.decimal('amount', 20, 8).notNullable();
+    table.string('currency', 3).notNullable();
+    table.integer('year').notNullable();
+    table.timestamp('calculation_date').notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     
-    table.index('account_id');
-    table.index('valuation_date');
+    table.index('user_id');
+    table.index('account_type');
+    table.index('year');
+    table.index('calculation_date');
   });
 };
 
 export const down = async (knex) => {
-  await knex.schema.dropTableIfExists('daily_account_valuation');
-  await knex.schema.dropTableIfExists('holdings_snapshots');
-  await knex.schema.dropTableIfExists('activity_import_profiles');
+  await knex.schema.dropTableIfExists('deposits_calculation');
   await knex.schema.dropTableIfExists('contribution_limits');
-  await knex.schema.dropTableIfExists('goals_allocation');
+  await knex.schema.dropTableIfExists('import_mappings');
+  await knex.schema.dropTableIfExists('market_data_providers');
+  await knex.schema.dropTableIfExists('exchange_rates');
+  await knex.schema.dropTableIfExists('goal_allocations');
   await knex.schema.dropTableIfExists('goals');
+  await knex.schema.dropTableIfExists('account_valuations');
+  await knex.schema.dropTableIfExists('holdings');
   await knex.schema.dropTableIfExists('quotes');
   await knex.schema.dropTableIfExists('activities');
   await knex.schema.dropTableIfExists('assets');

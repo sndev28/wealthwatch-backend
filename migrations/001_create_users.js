@@ -1,7 +1,7 @@
 export const up = async (knex) => {
   // Create users table
   await knex.schema.createTable('users', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.string('email', 255).unique().notNullable();
     table.string('password_hash', 255).notNullable();
     table.string('display_name', 255);
@@ -15,7 +15,7 @@ export const up = async (knex) => {
 
   // Create user_sessions table
   await knex.schema.createTable('user_sessions', (table) => {
-    table.uuid('id').primary().defaultTo(knex.raw('(hex(randomblob(16)))'));
+    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
     table.string('token_hash', 255).notNullable();
     table.timestamp('expires_at').notNullable();
